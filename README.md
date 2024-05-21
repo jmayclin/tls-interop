@@ -1,5 +1,5 @@
 # Interop Tests
-## Results
+## Results 2024-05-21
 ```
 handshake              , S2nTls    , S2nTls    , 🥳
 handshake              , S2nTls    , Rustls    , 🥳
@@ -42,6 +42,23 @@ mtls_request_response  , OpenSSL   , Rustls    , 🥳
 mtls_request_response  , OpenSSL   , Java      , 🚧
 mtls_request_response  , OpenSSL   , Go        , 🥳
 ```
+
+🥳 -> success
+💔 -> unimplemented
+🚧 -> unimplemented
+
+```
+$ java --version
+openjdk 21.0.2 2024-01-16 LTS
+OpenJDK Runtime Environment Corretto-21.0.2.14.1 (build 21.0.2+14-LTS)
+OpenJDK 64-Bit Server VM Corretto-21.0.2.14.1 (build 21.0.2+14-LTS, mixed mode, sharing)
+
+$ go version
+go version go1.22.2 linux/arm64
+```
+
+Java failures are expected, due to https://bugs.openjdk.org/browse/JDK-8329548
+
 ## Quickstart
 ```bash
 # build the rust (binding) clients (s2n-tls, rustls, openssl)
