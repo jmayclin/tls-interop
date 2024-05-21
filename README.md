@@ -1,4 +1,61 @@
 # Interop Tests
+## Results
+```
+handshake              , S2nTls    , S2nTls    , 🥳
+handshake              , S2nTls    , Rustls    , 🥳
+handshake              , S2nTls    , Java      , 🥳
+handshake              , S2nTls    , Go        , 🥳
+handshake              , OpenSSL   , S2nTls    , 🥳
+handshake              , OpenSSL   , Rustls    , 🥳
+handshake              , OpenSSL   , Java      , 🥳
+handshake              , OpenSSL   , Go        , 🥳
+greeting               , S2nTls    , S2nTls    , 🥳
+greeting               , S2nTls    , Rustls    , 🥳
+greeting               , S2nTls    , Java      , 🥳
+greeting               , S2nTls    , Go        , 🥳
+greeting               , OpenSSL   , S2nTls    , 🥳
+greeting               , OpenSSL   , Rustls    , 🥳
+greeting               , OpenSSL   , Java      , 🥳
+greeting               , OpenSSL   , Go        , 🥳
+large_data_download    , S2nTls    , S2nTls    , 🥳
+large_data_download    , S2nTls    , Rustls    , 🥳
+large_data_download    , S2nTls    , Java      , 💔
+large_data_download    , S2nTls    , Go        , 🥳
+large_data_download    , OpenSSL   , S2nTls    , 🥳
+large_data_download    , OpenSSL   , Rustls    , 🥳
+large_data_download    , OpenSSL   , Java      , 💔
+large_data_download    , OpenSSL   , Go        , 🥳
+large_data_download_with_frequent_key_updates, S2nTls    , S2nTls    , 🥳
+large_data_download_with_frequent_key_updates, S2nTls    , Rustls    , 🥳
+large_data_download_with_frequent_key_updates, S2nTls    , Java      , 🥳
+large_data_download_with_frequent_key_updates, S2nTls    , Go        , 🥳
+large_data_download_with_frequent_key_updates, OpenSSL   , S2nTls    , 🥳
+large_data_download_with_frequent_key_updates, OpenSSL   , Rustls    , 🥳
+large_data_download_with_frequent_key_updates, OpenSSL   , Java      , 🥳
+large_data_download_with_frequent_key_updates, OpenSSL   , Go        , 🥳
+mtls_request_response  , S2nTls    , S2nTls    , 🥳
+mtls_request_response  , S2nTls    , Rustls    , 🥳
+mtls_request_response  , S2nTls    , Java      , 🚧
+mtls_request_response  , S2nTls    , Go        , 🥳
+mtls_request_response  , OpenSSL   , S2nTls    , 🥳
+mtls_request_response  , OpenSSL   , Rustls    , 🥳
+mtls_request_response  , OpenSSL   , Java      , 🚧
+mtls_request_response  , OpenSSL   , Go        , 🥳
+```
+## Quickstart
+```bash
+# build the rust (binding) clients (s2n-tls, rustls, openssl)
+cargo build --manifest-path  tls-shim/Cargo.toml --release
+# build the java client
+javac java/SSLSocketClient.java
+# build the go client
+cd go/
+go build client.go
+cd ..
+
+cd common/
+cargo run --bin runner
+```
 ## Goal
 The goal of the tests in this category is to test interoperability with other TLS implementations. 
 
