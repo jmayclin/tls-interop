@@ -2,18 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use common::{InteropTest, CLIENT_GREETING, LARGE_DATA_DOWNLOAD_GB};
-use s2n_tls::{config::Config, security::DEFAULT_TLS13};
+use s2n_tls::{callbacks::{ConnectionFuture, SessionTicketCallback}, config::{Config, ConnectionInitializer}, security::DEFAULT_TLS13};
+use tracing::{debug, info};
 
-use std::error::Error;
+use std::{alloc::System, cell::RefCell, error::Error, pin::Pin, sync::{Arc, Mutex}, time::SystemTime};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{ClientTLS, ServerTLS};
+
+const STEK_NAME: &[u8; 9] = b"test_stek";
+const STEK_VALUE: [u8; 19] = [3,1,4,1,5,9,2,6,5,3,5,8,9,7,9,3,2,4,6];
 
 pub struct S2NShim;
 
 impl std::fmt::Display for S2NShim {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "s2n-tls")
+    }
+}
+
+#[derive(Default, Clone)]
+struct SessionTicketStorage {
+    ticket:Arc<Mutex<Option<Vec<u8>>>>,
+}
+
+impl SessionTicketCallback for SessionTicketStorage {
+    fn on_session_ticket(&self, _connection: &mut s2n_tls::connection::Connection, session_ticket: &s2n_tls::callbacks::SessionTicket) {
+        debug!("received a session ticket");
+        let mut ticket = vec![0; session_ticket.len().unwrap()];
+        session_ticket.data(&mut ticket).unwrap();
+        self.ticket.lock().unwrap().replace(ticket);
+    }
+}
+
+impl ConnectionInitializer for SessionTicketStorage {
+    fn initialize_connection(
+        &self,
+        connection: &mut s2n_tls::connection::Connection,
+    ) -> Result<Option<Pin<Box<dyn ConnectionFuture>>>, s2n_tls::error::Error> {
+        let ticket = self.ticket.lock().unwrap();
+        if ticket.is_some() {
+            tracing::info!("setting the session ticket");
+            connection.set_session_ticket(ticket.as_ref().unwrap())?;
+        }
+        Ok(None)
     }
 }
 
@@ -29,11 +61,21 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ClientTLS<T> for S2NShim {
         let mut config = Config::builder();
         config.set_security_policy(&DEFAULT_TLS13)?;
         config.trust_pem(&ca_pem)?;
-        if test == InteropTest::MTLSRequestResponse {
-            config.load_pem(
-                &std::fs::read(common::pem_file_path(common::PemType::ClientChain))?,
-                &std::fs::read(common::pem_file_path(common::PemType::ClientKey))?,
-            )?;
+
+        // additional configuration
+        match test {
+            InteropTest::MTLSRequestResponse => {
+                config.load_pem(
+                    &std::fs::read(common::pem_file_path(common::PemType::ClientChain))?,
+                    &std::fs::read(common::pem_file_path(common::PemType::ClientKey))?,
+                )?;
+            },
+            InteropTest::SessionResumption => {
+                let storage = SessionTicketStorage::default();
+                config.set_session_ticket_callback(storage.clone())?;
+                config.set_connection_initializer(storage.clone())?;
+            }
+            _ => {/* no additional configuration required */},
         }
         Ok(Some(config.build()?))
     }
@@ -58,15 +100,25 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ServerTLS<T> for S2NShim {
     fn get_server_config(
         test: InteropTest,
     ) -> Result<Option<s2n_tls::config::Config>, Box<dyn Error>> {
+        info!("getting the server config for {}", test);
         let cert_pem = std::fs::read(common::pem_file_path(common::PemType::ServerChain))?;
         let key_pem = std::fs::read(common::pem_file_path(common::PemType::ServerKey))?;
         let mut config = Config::builder();
         config.set_security_policy(&DEFAULT_TLS13)?;
         config.load_pem(&cert_pem, &key_pem)?;
-        if test == InteropTest::MTLSRequestResponse {
-            config.trust_pem(&std::fs::read(common::pem_file_path(
-                common::PemType::CaCert,
-            ))?)?;
+        match test{
+            InteropTest::MTLSRequestResponse => {
+                config.trust_pem(&std::fs::read(common::pem_file_path(
+                    common::PemType::CaCert,
+                ))?)?;
+            },
+            InteropTest::SessionResumption => {
+                config
+                    .enable_session_tickets(true)?
+                    .add_session_ticket_key(STEK_NAME, &STEK_VALUE, SystemTime::UNIX_EPOCH)?;
+            }
+            _ => {/* no additional configuration required */}
+
         }
         Ok(Some(config.build()?))
     }
@@ -112,5 +164,12 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ServerTLS<T> for S2NShim {
         let updates = stream.as_ref().key_update_counts()?;
         assert!(updates.send_key_updates > 0);
         Ok(())
+    }
+
+    fn validate_resumption(stream: &Self::Stream) -> bool {
+        !stream.as_ref()
+        .handshake_type()
+        .unwrap()
+        .contains("FULL_HANDSHAKE")
     }
 }

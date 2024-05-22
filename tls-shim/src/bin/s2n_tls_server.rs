@@ -45,9 +45,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // if the test case isn't supported, return 127
         None => exit(127),
     };
-    if let Err(e) = run_server(config, port, test).await {
+    if test == InteropTest::SessionResumption {
+        // if we are testing session resumption, we first do a basic "request reseponse" behavior.
+        // this ends up sending the session ticket, then when we execute the real `SessionResumption`
+        // scenario we validate that session resumption actually happened
+        if let Err(e) = run_server(config.clone(), port, InteropTest::Greeting).await {
+            tracing::error!("test scenario failed: {:?}", e);
+            exit(1);
+        }
+    }
+    if let Err(e) = run_server(config.clone(), port, test).await {
         tracing::error!("test scenario failed: {:?}", e);
         exit(1);
     }
+
+
     Ok(())
 }

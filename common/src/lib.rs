@@ -85,6 +85,7 @@ pub enum InteropTest {
     LargeDataDownload,
     LargeDataDownloadWithFrequentKeyUpdates,
     MTLSRequestResponse,
+    SessionResumption,
 }
 
 impl FromStr for InteropTest {
@@ -99,6 +100,7 @@ impl FromStr for InteropTest {
                 InteropTest::LargeDataDownloadWithFrequentKeyUpdates
             }
             "mtls_request_response" => InteropTest::MTLSRequestResponse,
+            "session_resumption" => InteropTest::SessionResumption,
             _ => return Err(format!("unrecognized test type: {}", s)),
         };
         Ok(name)
@@ -115,6 +117,7 @@ impl Display for InteropTest {
                 "large_data_download_with_frequent_key_updates"
             },
             InteropTest::MTLSRequestResponse => "mtls_request_response",
+            InteropTest::SessionResumption => "session_resumption",
         };
         write!(f, "{}", name)
     }

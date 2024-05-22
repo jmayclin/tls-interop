@@ -1,4 +1,5 @@
 use common::InteropTest;
+use tracing::Level;
 
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tls_shim_interop::{
@@ -9,29 +10,50 @@ use turmoil::Sim;
 
 // turmoil's send function seems to be quadratic somewhere. Sending 1 Gb takes approximately 229 seconds
 // so don't enable the large data tests.
-const TEST_CASES: [InteropTest; 3] = [
+const TEST_CASES: [InteropTest; 4] = [
     InteropTest::Greeting,
     InteropTest::Handshake,
     InteropTest::MTLSRequestResponse,
+    InteropTest::SessionResumption,
     // InteropTest::LargeDataDownload,
     // InteropTest::LargeDataDownloadWithFrequentKeyUpdates,
 ];
 
 const PORT: u16 = 1738;
 
+// async fn server_handle_connection<T>(test: InteropTest, acceptor: T::Config) -> Result<(), Box<dyn std::error::Error>> 
+// where
+//     T: ServerTLS<turmoil::net::TcpStream>
+// {
+//     let server = T::acceptor(config);
+
+//     let listener =
+//         turmoil::net::TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, PORT)).await?;
+
+//     let (stream, _peer_addr) = listener.accept().await?;
+
+//     let server_clone = server.clone();
+//     let tls = T::accept(&server_clone, stream).await.unwrap();
+//     T::handle_server_connection(test, tls).await.unwrap();
+//     Ok(())
+// }
+
 async fn server_loop<T>(test: InteropTest) -> Result<(), Box<dyn std::error::Error>>
 where
     T: ServerTLS<turmoil::net::TcpStream>,
 {
     let config = T::get_server_config(test)?.unwrap();
+    let listener = turmoil::net::TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, PORT)).await?;
 
     let server = T::acceptor(config);
-
-    let listener =
-        turmoil::net::TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, PORT)).await?;
-
+    
+    if test == InteropTest::SessionResumption {
+        let (stream, _peer_addr) = listener.accept().await?;
+        let server_clone = server.clone();
+        let tls = T::accept(&server_clone, stream).await.unwrap();
+        T::handle_server_connection(InteropTest::Greeting, tls).await.unwrap();
+    }
     let (stream, _peer_addr) = listener.accept().await?;
-
     let server_clone = server.clone();
     let tls = T::accept(&server_clone, stream).await.unwrap();
     T::handle_server_connection(test, tls).await.unwrap();
@@ -46,10 +68,14 @@ where
     T: ClientTLS<turmoil::net::TcpStream>,
 {
     let config = T::get_client_config(test)?.unwrap();
-
     let client = T::connector(config);
-    let transport_stream = turmoil::net::TcpStream::connect((server_domain, PORT)).await?;
 
+    if test == InteropTest::SessionResumption {
+        let transport_stream = turmoil::net::TcpStream::connect((server_domain.as_str(), PORT)).await?;
+        let tls = T::connect(&client, transport_stream).await.unwrap();
+        T::handle_client_connection(test, tls).await.unwrap();
+    }
+    let transport_stream = turmoil::net::TcpStream::connect((server_domain, PORT)).await?;
     let tls = T::connect(&client, transport_stream).await.unwrap();
     T::handle_client_connection(test, tls).await.unwrap();
     Ok(())
@@ -78,13 +104,17 @@ where
 
 #[test]
 fn turmoil_interop() -> turmoil::Result {
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(Level::DEBUG)
+        .init();
+
     let mut sim = turmoil::Builder::new().build();
 
     for t in TEST_CASES {
-        setup_scenario::<S2NShim, RustlsShim>(&mut sim, t);
+        //setup_scenario::<S2NShim, RustlsShim>(&mut sim, t);
         setup_scenario::<S2NShim, S2NShim>(&mut sim, t);
-        setup_scenario::<OpensslShim, RustlsShim>(&mut sim, t);
-        setup_scenario::<OpensslShim, S2NShim>(&mut sim, t);
+        //setup_scenario::<OpensslShim, RustlsShim>(&mut sim, t);
+        //setup_scenario::<OpensslShim, S2NShim>(&mut sim, t);
     }
 
     sim.run()

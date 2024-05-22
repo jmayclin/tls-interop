@@ -34,6 +34,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
     let (test, port) = common::parse_server_arguments();
     let config = <S2NShim as ClientTLS<TcpStream>>::get_client_config(test)?.unwrap();
-    run_client::<S2NShim>(config, port, test).await?;
+    run_client::<S2NShim>(config.clone(), port, test).await?;
+    if test == InteropTest::SessionResumption {
+        run_client::<S2NShim>(config, port, test).await?;
+    }
     Ok(())
 }

@@ -15,6 +15,7 @@ use std::{error::Error, fmt::Debug};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use common::{InteropTest, CLIENT_GREETING, LARGE_DATA_DOWNLOAD_GB, SERVER_GREETING};
+use tracing::{error, info};
 
 pub mod openssl_shim;
 pub mod rustls_shim;
@@ -80,6 +81,19 @@ pub trait ServerTLS<T> {
             InteropTest::LargeDataDownloadWithFrequentKeyUpdates => {
                 Self::handle_large_data_download_with_frequent_key_updates(&mut stream).await?;
             }
+            InteropTest::SessionResumption => {
+                let mut client_greeting_buffer = vec![0; CLIENT_GREETING.as_bytes().len()];
+                stream.read_exact(&mut client_greeting_buffer).await?;
+                assert_eq!(client_greeting_buffer, CLIENT_GREETING.as_bytes());
+
+                stream.write_all(SERVER_GREETING.as_bytes()).await?;
+                if Self::validate_resumption(&stream) {
+                    info!("session used session resumption")
+                } else {
+                    error!("session resumption was not used");
+                    return Err("session resumption not used".into())
+                }
+            }
             _ => panic!("Internal Framework Error"),
         }
 
@@ -99,6 +113,11 @@ pub trait ServerTLS<T> {
         _stream: &mut Self::Stream,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         Err("unimplemented".into())
+    }
+
+    /// if the stream used resumption, then return true. Otherwise return false
+    fn validate_resumption(_stream: &Self::Stream) -> bool {
+        false
     }
 }
 
@@ -123,7 +142,7 @@ pub trait ClientTLS<T> {
         tracing::info!("executing the {:?} scenario", test);
         match test {
             InteropTest::Handshake => { /* no data exchange in the handshake case */ }
-            InteropTest::Greeting | InteropTest::MTLSRequestResponse => {
+            InteropTest::Greeting | InteropTest::MTLSRequestResponse | InteropTest::SessionResumption => {
                 stream.write_all(CLIENT_GREETING.as_bytes()).await?;
 
                 let mut server_greeting_buffer = vec![0; SERVER_GREETING.as_bytes().len()];

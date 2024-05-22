@@ -27,6 +27,7 @@ const ENABLED_TESTS: [InteropTest; 5] = [
     InteropTest::MTLSRequestResponse,
     InteropTest::LargeDataDownload,
     InteropTest::LargeDataDownloadWithFrequentKeyUpdates,
+    //InteropTest::SessionResumption,
 ];
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -49,12 +50,12 @@ impl Client {
             Client::S2nTls => concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/..",
-                "/tls-shim-interop/target/release/s2n_tls_client"
+                "/tls-shim/target/release/s2n_tls_client"
             ),
             Client::Rustls => concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/..",
-                "/tls-shim-interop/target/release/rustls_client"
+                "/tls-shim/target/release/rustls_client"
             ),
             Client::Java => "java",
             Client::Go => concat!(
@@ -87,12 +88,12 @@ impl Server {
             Server::S2nTls => concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/..",
-                "/tls-shim-interop/target/release/s2n_tls_server"
+                "/tls-shim/target/release/s2n_tls_server"
             ),
             Server::OpenSSL => concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/..",
-                "/tls-shim-interop/target/release/openssl_server"
+                "/tls-shim/target/release/openssl_server"
             ),
         }
     }
