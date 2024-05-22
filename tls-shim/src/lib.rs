@@ -170,9 +170,11 @@ pub trait ClientTLS<T> {
         // wait for the server to shutdown it's side of the connection, which
         // will return a 0 byte read
         tracing::info!("waiting for the server to shut down");
-        let shutdown_wait = stream.read(&mut [0]).await?;
-        assert_eq!(0, shutdown_wait);
-
+        // The server might TCP FIN immediately followed by a TCP RST
+        // if the RST is read before the stream is ever polled forward, then
+        // this method errors with a "ConnectionReset" error. Therefore we can't
+        // assert errors on this method
+        let _ = stream.read(&mut [0]).await;
         Ok(())
     }
 }

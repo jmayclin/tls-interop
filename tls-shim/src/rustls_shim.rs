@@ -49,6 +49,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send + Debug> ClientTLS<T> for RustlsSh
         let config = match test {
             InteropTest::Greeting
             | InteropTest::Handshake
+            | InteropTest::SessionResumption
             | InteropTest::LargeDataDownload
             | InteropTest::LargeDataDownloadWithFrequentKeyUpdates => {
                 rustls::ClientConfig::builder()

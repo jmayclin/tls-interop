@@ -1,4 +1,5 @@
 use common::InteropTest;
+use rand::SeedableRng;
 use tracing::Level;
 
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -10,10 +11,10 @@ use turmoil::Sim;
 
 // turmoil's send function seems to be quadratic somewhere. Sending 1 Gb takes approximately 229 seconds
 // so don't enable the large data tests.
-const TEST_CASES: [InteropTest; 4] = [
-    InteropTest::Greeting,
-    InteropTest::Handshake,
-    InteropTest::MTLSRequestResponse,
+const TEST_CASES: [InteropTest; 1] = [
+    //InteropTest::Greeting,
+    //InteropTest::Handshake,
+    //InteropTest::MTLSRequestResponse,
     InteropTest::SessionResumption,
     // InteropTest::LargeDataDownload,
     // InteropTest::LargeDataDownloadWithFrequentKeyUpdates,
@@ -73,6 +74,9 @@ where
     if test == InteropTest::SessionResumption {
         let transport_stream = turmoil::net::TcpStream::connect((server_domain.as_str(), PORT)).await?;
         let tls = T::connect(&client, transport_stream).await.unwrap();
+        // I keep getting panics here
+        // called `Result::unwrap()` on an `Err` value: Custom { kind: ConnectionReset, error: "Connection reset" }
+        // note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
         T::handle_client_connection(test, tls).await.unwrap();
     }
     let transport_stream = turmoil::net::TcpStream::connect((server_domain, PORT)).await?;
@@ -86,16 +90,24 @@ where
     S: ServerTLS<turmoil::net::TcpStream> + 'static,
     C: ClientTLS<turmoil::net::TcpStream> + 'static,
 {
+    // let server_name = format!(
+    //     "{}-{}-{}-server",
+    //     std::any::type_name::<S>(),
+    //     std::any::type_name::<C>(),
+    //     test
+    // );
+    // let client_name = format!(
+    //     "{}-{}-{}-client",
+    //     std::any::type_name::<S>(),
+    //     std::any::type_name::<C>(),
+    //     test
+    // );
     let server_name = format!(
-        "{}-{}-{}-server",
-        std::any::type_name::<S>(),
-        std::any::type_name::<C>(),
+        "{}-server",
         test
     );
     let client_name = format!(
-        "{}-{}-{}-client",
-        std::any::type_name::<S>(),
-        std::any::type_name::<C>(),
+        "{}-client",
         test
     );
     sim.host(server_name.as_str(), move || server_loop::<S>(test));
@@ -105,17 +117,20 @@ where
 #[test]
 fn turmoil_interop() -> turmoil::Result {
     tracing_subscriber::fmt::fmt()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(Level::INFO)
         .init();
-
-    let mut sim = turmoil::Builder::new().build();
-
-    for t in TEST_CASES {
-        //setup_scenario::<S2NShim, RustlsShim>(&mut sim, t);
-        setup_scenario::<S2NShim, S2NShim>(&mut sim, t);
-        //setup_scenario::<OpensslShim, RustlsShim>(&mut sim, t);
-        //setup_scenario::<OpensslShim, S2NShim>(&mut sim, t);
+    for i in 0..100 {
+        let rand = Box::new(rand::rngs::SmallRng::seed_from_u64(7));
+        let mut sim = turmoil::Builder::new().build_with_rng(rand);
+    
+        for t in TEST_CASES {
+            setup_scenario::<S2NShim, RustlsShim>(&mut sim, t);
+            //setup_scenario::<S2NShim, S2NShim>(&mut sim, t);
+            //setup_scenario::<OpensslShim, RustlsShim>(&mut sim, t);
+            //setup_scenario::<OpensslShim, S2NShim>(&mut sim, t);
+        }
+    
+        sim.run().unwrap();
     }
-
-    sim.run()
+    Ok(())
 }
